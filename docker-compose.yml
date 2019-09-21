@@ -1,0 +1,40 @@
+version: '3'
+services:
+  php:
+    image: "php:7.2.22"
+    volumes:
+      - ./data:/var/www/data
+      - ./php:/var/www/php
+    networks:
+      - php
+    tty: true
+  go:
+    image: "golang:1.13"
+    volumes:
+      - ./data:/var/www/data
+      - ./go:/var/www/go
+    networks:
+      - go
+    environment:
+      GOPATH: /var/www/go
+    tty: true
+  mysql:
+    image: "mysql:5.7"
+    ports:
+      - "13306:3306"
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+      - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql/ddl:/docker-entrypoint-initdb.d
+    networks:
+      - php
+      - go
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: go_practice
+      MYSQL_USER: go_practice
+      MYSQL_PASSWORD: go_practice
+      TZ: 'Asia/Tokyo'
+networks:
+  php:
+  go:
