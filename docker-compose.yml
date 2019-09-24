@@ -16,7 +16,7 @@ services:
     networks:
       - go
     environment:
-      GOPATH: /var/www/go
+      ENVIRONMENT: production
     tty: true
   mysql:
     image: "mysql:5.7"

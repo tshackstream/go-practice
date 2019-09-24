@@ -1,0 +1,6 @@
+host = "127.0.0.1"
+port = "13306"
+user = "root"
+# パスワードは本来GitHubなど他者から見られる可能性のある場所で管理すべきではない
+pass = "root"
+db_name = "go_practice"

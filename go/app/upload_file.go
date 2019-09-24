@@ -63,7 +63,7 @@ func doImport(file io.Reader) (bool, map[int]string) {
 
 		// ヘッダ行はスキップ
 		if i == 1 {
-			i += 1
+			i++
 			continue
 		}
 
@@ -108,7 +108,7 @@ func doImport(file io.Reader) (bool, map[int]string) {
 			stmt.Close()
 		}
 
-		// この段階まで来たらnewdata_flagはいらないので削除]
+		// この段階まで来たらnewdata_flagはいらないので削除
 		// mapより配列の方が都合がいいので変数lineを使う
 		// SQLのVALUES句 に入れるため"val1", "val2"... のようにダブルクォートで囲んでカンマで区切った文字列にする
 		// ちょっと強引か…
@@ -117,7 +117,7 @@ func doImport(file io.Reader) (bool, map[int]string) {
 		values := fmt.Sprintf("(%s)", formattedLine)
 		row = append(row, values)
 
-		i += 1
+		i++
 	}
 
 	// エラーメッセージ配列が空でない場合エラーを返して終了
