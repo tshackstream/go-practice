@@ -12,6 +12,64 @@ import (
 	"sync"
 )
 
+// CSV作成
+func MakeCSV() {
+	fileName := "addresses_from_db_go.csv"
+	WriteHeader(fileName)
+	totalCount := GetTotalCount()
+	if totalCount == 0 {
+		fmt.Println("データがありません")
+		os.Exit(0)
+	}
+	limit := 10000
+	bulkNum := int(math.Ceil(float64(totalCount / limit)))
+
+	file := OpenNewFile(fileName)
+	defer file.Close()
+	goCSVWriter := gocsv.NewSafeCSVWriter(csv.NewWriter(file))
+
+	for i := 0; i <= bulkNum; i++ {
+		offset := i * limit
+		// 書き込み関数
+		WriteContent(goCSVWriter, limit, offset)
+	}
+
+}
+
+// 並行処理で作成
+func MakeCSVConcurrently() {
+	fileName := "addresses_from_db_go_concurrent.csv"
+
+	WriteHeader(fileName)
+
+	totalCount := GetTotalCount()
+	if totalCount == 0 {
+		fmt.Println("データがありません")
+		os.Exit(0)
+	}
+	limit := 10000
+	bulkNum := int(math.Ceil(float64(totalCount / limit)))
+	wg := sync.WaitGroup{}
+	// goroutineの数を制限する
+	ch := make(chan int, 2)
+
+	for i := 0; i <= bulkNum; i++ {
+		ch <- 1
+		wg.Add(1)
+		offset := i * limit
+		go func() {
+			file := OpenNewFile(fileName)
+			defer file.Close()
+			goCSVWriter := gocsv.NewSafeCSVWriter(csv.NewWriter(file))
+			// 書き込み関数
+			WriteContent(goCSVWriter, limit, offset)
+			<-ch
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
 // 新規CSVファイルを開く
 func OpenNewFile(fileName string) *os.File {
 	currentDir, err := os.Getwd()
@@ -31,60 +89,30 @@ func GetTotalCount() int {
 	return count
 }
 
-// CSV作成
-func MakeCSV() {
-	totalCount := GetTotalCount()
-	if totalCount == 0 {
-		fmt.Println("データがありません")
-		os.Exit(0)
-	}
-	limit := 10000
-	bulkNum := int(math.Ceil(float64(totalCount / limit)))
-
-	file := OpenNewFile("addresses_from_db_go.csv")
+// ヘッダ行書き込み
+func WriteHeader(fileName string) {
+	file := OpenNewFile(fileName)
 	defer file.Close()
-	goCSVWriter := gocsv.NewSafeCSVWriter(csv.NewWriter(file))
-
-	for i := 0; i <= bulkNum; i++ {
-		offset := i * limit
-		// 書き込み関数
-		writeContent(goCSVWriter, limit, offset)
-	}
-
-}
-
-// 並行処理で作成
-func MakeCSVConcurrently() {
-	totalCount := GetTotalCount()
-	if totalCount == 0 {
-		fmt.Println("データがありません")
-		os.Exit(0)
-	}
-	limit := 10000
-	bulkNum := int(math.Ceil(float64(totalCount / limit)))
-	wg := sync.WaitGroup{}
-	// goroutineの数を制限する
-	ch := make(chan int, 2)
-
-	for i := 0; i <= bulkNum; i++ {
-		ch <- 1
-		wg.Add(1)
-		offset := i * limit
-		go func() {
-			file := OpenNewFile("addresses_from_db_go_concurrent.csv")
-			defer file.Close()
-			goCSVWriter := gocsv.NewSafeCSVWriter(csv.NewWriter(file))
-			// 書き込み関数
-			writeContent(goCSVWriter, limit, offset)
-			<-ch
-			wg.Done()
-		}()
-	}
-	wg.Wait()
+	writer := csv.NewWriter(file)
+	// 横着してべた書きしたが本来はうまいことやりたい
+	err := writer.Write(
+		[]string{
+			"todofuken_code",
+			"shikuchoson_code",
+			"ooaza_code",
+			"chome_code",
+			"todofuken_name",
+			"shikuchoson_name",
+			"ooazachome_name",
+			"lat",
+			"lon",
+			"newdata_flag"})
+	error.ErrorAndExit(err)
+	writer.Flush()
 }
 
 // データ行書き込み
-func writeContent(writer *gocsv.SafeCSVWriter, limit int, offset int) {
+func WriteContent(writer *gocsv.SafeCSVWriter, limit int, offset int) {
 	// DB接続
 	db := goPracticeDb.ConnectToDB()
 	defer db.Close()
@@ -98,11 +126,11 @@ func writeContent(writer *gocsv.SafeCSVWriter, limit int, offset int) {
 	defer query.Close()
 
 	// CSVに書き込むデータ
-	var csvRow []*AddressesCols
+	var csvRow []*CsvColumns
 
 	// 1行ずつ書き出し
 	for query.Next() {
-		row := AddressesCols{}
+		row := CsvColumns{}
 		err := query.Scan(
 			&row.TodofukenCode,
 			&row.ShikuchosonCode,
@@ -114,10 +142,10 @@ func writeContent(writer *gocsv.SafeCSVWriter, limit int, offset int) {
 			&row.Lat,
 			&row.Lon)
 		error.ErrorAndExit(err)
+		row.NewDataFlag = "0"
 		csvRow = append(csvRow, &row)
-
-		err = gocsv.MarshalCSVWithoutHeaders(csvRow, writer)
-		error.ErrorAndExit(err)
-		csvRow = nil
 	}
+
+	err = gocsv.MarshalCSVWithoutHeaders(csvRow, writer)
+	error.ErrorAndExit(err)
 }
