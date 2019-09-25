@@ -12,23 +12,6 @@ import (
 	"sync"
 )
 
-// writeContent関数のオプション引数を設定
-// nullableにしたいのでポインタ
-type selectOptions struct {
-	limit  *int
-	offset *int
-}
-
-type SelectOption func(*selectOptions)
-
-// オプション引数に値を設定する関数
-func SetLimitOffset(limit *int, offset *int) SelectOption {
-	return func(opt *selectOptions) {
-		opt.limit = limit
-		opt.offset = offset
-	}
-}
-
 // 新規CSVファイルを開く
 func OpenNewFile(fileName string) *os.File {
 	currentDir, err := os.Getwd()
