@@ -49,17 +49,25 @@ func GetTotalCount() int {
 }
 
 // CSV作成
-func MakeCSV(writer *csv.Writer, limitOffset ...SelectOption) {
-	// 引数limitOffsetのデフォルト値
-	selectOptions := selectOptions{}
-	for _, opt := range limitOffset {
-		opt(&selectOptions)
+func MakeCSV() {
+	totalCount := GetTotalCount()
+	if totalCount == 0 {
+		fmt.Println("データがありません")
+		os.Exit(0)
+	}
+	limit := 10000
+	bulkNum := int(math.Ceil(float64(totalCount / limit)))
+
+	file := OpenNewFile("addresses_from_db_go.csv")
+	defer file.Close()
+	goCSVWriter := gocsv.NewSafeCSVWriter(csv.NewWriter(file))
+
+	for i := 0; i <= bulkNum; i++ {
+		offset := i * limit
+		// 書き込み関数
+		writeContent(goCSVWriter, limit, offset)
 	}
 
-	goCSVWriter := gocsv.NewSafeCSVWriter(writer)
-
-	// 書き込み関数
-	writeContent(goCSVWriter, selectOptions)
 }
 
 // 並行処理で作成
@@ -70,18 +78,21 @@ func MakeCSVConcurrently() {
 		os.Exit(0)
 	}
 	limit := 10000
-	chunk := int(math.Ceil(float64(totalCount / limit)))
+	bulkNum := int(math.Ceil(float64(totalCount / limit)))
 	wg := sync.WaitGroup{}
 	// goroutineの数を制限する
 	ch := make(chan int, 2)
-	for i := 0; i <= chunk; i++ {
+
+	for i := 0; i <= bulkNum; i++ {
 		ch <- 1
 		wg.Add(1)
 		offset := i * limit
 		go func() {
 			file := OpenNewFile("addresses_from_db_go_concurrent.csv")
 			defer file.Close()
-			MakeCSV(csv.NewWriter(file), SetLimitOffset(&limit, &offset))
+			goCSVWriter := gocsv.NewSafeCSVWriter(csv.NewWriter(file))
+			// 書き込み関数
+			writeContent(goCSVWriter, limit, offset)
 			<-ch
 			wg.Done()
 		}()
@@ -90,16 +101,15 @@ func MakeCSVConcurrently() {
 }
 
 // データ行書き込み
-func writeContent(writer *gocsv.SafeCSVWriter, limitOffset selectOptions) {
+func writeContent(writer *gocsv.SafeCSVWriter, limit int, offset int) {
 	// DB接続
 	db := goPracticeDb.ConnectToDB()
 	defer db.Close()
 
 	// DBからデータ取得しつつ、CSV書き出し
-	sql := "SELECT * FROM addresses"
-	if limitOffset.limit != nil && limitOffset.offset != nil {
-		sql = sql + fmt.Sprintf(" LIMIT %d OFFSET %d", *limitOffset.limit, *limitOffset.offset)
-	}
+	sql := "SELECT * FROM addresses LIMIT %d OFFSET %d"
+	sql = fmt.Sprintf(sql, limit, offset)
+
 	query, err := db.Query(sql)
 	error.ErrorAndExit(err)
 	defer query.Close()
@@ -123,11 +133,8 @@ func writeContent(writer *gocsv.SafeCSVWriter, limitOffset selectOptions) {
 		error.ErrorAndExit(err)
 		csvRow = append(csvRow, &row)
 
-		// 5000件ごとに書き出し
-		if len(csvRow) == 5000 {
-			err = gocsv.MarshalCSVWithoutHeaders(csvRow, writer)
-			error.ErrorAndExit(err)
-			csvRow = nil
-		}
+		err = gocsv.MarshalCSVWithoutHeaders(csvRow, writer)
+		error.ErrorAndExit(err)
+		csvRow = nil
 	}
 }

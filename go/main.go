@@ -59,9 +59,7 @@ func main() {
 		if *isConcurrent {
 			app.MakeCSVConcurrently()
 		} else {
-			file := app.OpenNewFile("addresses_from_db_go.csv")
-			defer file.Close()
-			app.MakeCSV(csv.NewWriter(file))
+			app.MakeCSV()
 		}
 		log.Print("make csv finished")
 	default:

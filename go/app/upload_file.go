@@ -175,7 +175,7 @@ func CheckAndImport(insertValues []string, checkConditions []string) (bool, []st
 		defer checkStmt.Close()
 		error.ErrorAndExit(err)
 
-		// それぞれのコードの組み合わせをOR検索
+		// それぞれのコードの組み合わせを検索
 		checkQuery, err := checkStmt.Query()
 		error.ErrorAndExit(err)
 		for checkQuery.Next() {
