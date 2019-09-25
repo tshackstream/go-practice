@@ -4,58 +4,66 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"github.com/gocarina/gocsv"
 	"go-practice/app"
-	"math"
+	"go-practice/app/error"
+	"io"
+	"log"
 	"os"
-	"sync"
+	"path/filepath"
 )
 
 func main() {
-	// コマンドラインオプション「によって処理を分ける
+	// コマンドラインオプションによって処理を分ける
 	action := flag.String("a", "", "")
+	// 並行処理オプションがあったら並行処理
+	// Goは並行処理(Concurrent)らしいが、Parallelの方がなじみがあるのでオプションpにする
 	isConcurrent := flag.Bool("p", false, "")
 	flag.Parse()
+
+	// ログファイルの設定
+	currentDir, err := os.Getwd()
+	error.ErrorAndExit(err)
+	path := filepath.Join(currentDir, "../data/logs.log")
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0775)
+	error.ErrorAndExit(err)
+	log.SetOutput(io.MultiWriter(file, os.Stdout))
 
 	switch *action {
 	// アップロード
 	case "upload":
-		// TODO 並行処理パラメータがあったら並列処理
-		succeeded, errorMessages := app.Upload()
-		if !succeeded {
-			for row, message := range errorMessages {
-				fmt.Println(string(row) + "行目: " + message)
-			}
+		file := app.OpenUploadFile()
+		defer file.Close()
+		reader := csv.NewReader(file)
+
+		// 各行とカラムの構造体を紐づけた形で読み込む
+		cols := app.CsvColumns{}
+		goCsvReader, err := gocsv.NewUnmarshaller(reader, cols)
+		error.ErrorAndExit(err)
+
+		var execSucceeded bool
+
+		if *isConcurrent {
+			execSucceeded = app.UploadConcurrently(goCsvReader)
+		} else {
+			execSucceeded = app.Upload(goCsvReader)
+		}
+
+		if execSucceeded {
+			fmt.Println("upload succeeded")
+		} else {
+			fmt.Println("upload failed")
 		}
 	// DBからCSVを作成
 	case "make_csv":
-		// 並行処理パラメータがあったら並行処理
-		// Goは並行処理(Concurrent)のようだが、Parallelの方がなじみがあるのでオプションpにする
 		if *isConcurrent {
-			totalCount := app.GetTotalCount()
-			if totalCount == 0 {
-				fmt.Println("データがありません")
-				os.Exit(0)
-			}
-			limit := 10000
-			chunk := int(math.Ceil(float64(totalCount / limit)))
-			wg := sync.WaitGroup{}
-			for i := 0; i <= chunk; i++ {
-				wg.Add(1)
-				offset := i * limit
-				go func() {
-					file := app.OpenNewFile("addresses_from_db_go_concurrent.csv")
-					defer file.Close()
-					app.MakeCSV(csv.NewWriter(file), app.SetLimitOffset(&limit, &offset))
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-			fmt.Println("end")
+			app.MakeCSVConcurrently()
 		} else {
 			file := app.OpenNewFile("addresses_from_db_go.csv")
 			defer file.Close()
 			app.MakeCSV(csv.NewWriter(file))
 		}
+		log.Print("make csv finished")
 	default:
 		fmt.Println("不正なアクションです")
 	}

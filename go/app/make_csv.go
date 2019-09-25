@@ -6,22 +6,11 @@ import (
 	"github.com/gocarina/gocsv"
 	goPracticeDb "go-practice/app/db"
 	"go-practice/app/error"
+	"math"
 	"os"
 	"path/filepath"
+	"sync"
 )
-
-// DBカラムの構造体
-type AddressesCol struct {
-	TodofukenCode   string `csv:"todofuken_code"`
-	ShikuchosonCode string `csv:"shikuchoson_code"`
-	OoazaCode       string `csv:"ooaza_code"`
-	ChomeCode       string `csv:"chome_code"`
-	TodofukenName   string `csv:"todofuken_name"`
-	ShikuchosonName string `csv:"shikuchoson_name"`
-	OoazachomeName  string `csv:"ooazachome_name"`
-	Lat             string `csv:"lat"`
-	Lon             string `csv:"lon"`
-}
 
 // writeContent関数のオプション引数を設定
 // nullableにしたいのでポインタ
@@ -40,16 +29,16 @@ func SetLimitOffset(limit *int, offset *int) SelectOption {
 	}
 }
 
+// 新規CSVファイルを開く
 func OpenNewFile(fileName string) *os.File {
-	// 新規CSVファイルを開く
 	currentDir, err := os.Getwd()
 	file, err := os.OpenFile(filepath.Join(currentDir, "../data/"+fileName), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0775)
 	error.ErrorAndExit(err)
 	return file
 }
 
+// データ総数を取得
 func GetTotalCount() int {
-	// データ総数を取得
 	var count int
 	db := goPracticeDb.ConnectToDB()
 	defer db.Close()
@@ -59,6 +48,7 @@ func GetTotalCount() int {
 	return count
 }
 
+// CSV作成
 func MakeCSV(writer *csv.Writer, limitOffset ...SelectOption) {
 	// 引数limitOffsetのデフォルト値
 	selectOptions := selectOptions{}
@@ -70,6 +60,33 @@ func MakeCSV(writer *csv.Writer, limitOffset ...SelectOption) {
 
 	// 書き込み関数
 	writeContent(goCSVWriter, selectOptions)
+}
+
+// 並行処理で作成
+func MakeCSVConcurrently() {
+	totalCount := GetTotalCount()
+	if totalCount == 0 {
+		fmt.Println("データがありません")
+		os.Exit(0)
+	}
+	limit := 10000
+	chunk := int(math.Ceil(float64(totalCount / limit)))
+	wg := sync.WaitGroup{}
+	// goroutineの数を制限する
+	ch := make(chan int, 2)
+	for i := 0; i <= chunk; i++ {
+		ch <- 1
+		wg.Add(1)
+		offset := i * limit
+		go func() {
+			file := OpenNewFile("addresses_from_db_go_concurrent.csv")
+			defer file.Close()
+			MakeCSV(csv.NewWriter(file), SetLimitOffset(&limit, &offset))
+			<-ch
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 
 // データ行書き込み
@@ -88,11 +105,11 @@ func writeContent(writer *gocsv.SafeCSVWriter, limitOffset selectOptions) {
 	defer query.Close()
 
 	// CSVに書き込むデータ
-	var csvRow []*AddressesCol
+	var csvRow []*AddressesCols
 
 	// 1行ずつ書き出し
 	for query.Next() {
-		row := AddressesCol{}
+		row := AddressesCols{}
 		err := query.Scan(
 			&row.TodofukenCode,
 			&row.ShikuchosonCode,
@@ -112,6 +129,5 @@ func writeContent(writer *gocsv.SafeCSVWriter, limitOffset selectOptions) {
 			error.ErrorAndExit(err)
 			csvRow = nil
 		}
-
 	}
 }
