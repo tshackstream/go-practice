@@ -168,6 +168,7 @@ func CheckAndImport(insertValues []string, checkConditions []string) (bool, []st
 		errorMessageFormat := "都道府県コード: %s 市区町村コード: %s 大字コード: %s 丁目コード: %s は既に登録されています。"
 		// OR検索使うよりも早いUNION ALLを使う
 		// TODO (todofuken_code, shikuchoson_code, ooaza_code, chome_code) IN (x, x, x, x), ... のほうがいいかも
+		// そうしたら1回に処理できるデータが増える
 		// 1回に処理するデータ量が多すぎるとスタック不足になるので要注意
 		checkSql := fmt.Sprintf(
 			"SELECT todofuken_code, shikuchoson_code, ooaza_code, chome_code FROM (%s) t1",
