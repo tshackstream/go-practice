@@ -13,7 +13,7 @@ import (
 )
 
 // CSV作成
-func MakeCSV() {
+func MakeCSV(limit int) {
 	fileName := "addresses_from_db_go.csv"
 	WriteHeader(fileName)
 	totalCount := GetTotalCount()
@@ -21,7 +21,7 @@ func MakeCSV() {
 		fmt.Println("データがありません")
 		os.Exit(0)
 	}
-	limit := 10000
+
 	bulkNum := int(math.Ceil(float64(totalCount / limit)))
 
 	file := OpenNewFile(fileName)
@@ -37,7 +37,7 @@ func MakeCSV() {
 }
 
 // 並行処理で作成
-func MakeCSVConcurrently() {
+func MakeCSVConcurrently(limit int) {
 	fileName := "addresses_from_db_go_concurrent.csv"
 
 	WriteHeader(fileName)
@@ -47,7 +47,7 @@ func MakeCSVConcurrently() {
 		fmt.Println("データがありません")
 		os.Exit(0)
 	}
-	limit := 10000
+
 	bulkNum := int(math.Ceil(float64(totalCount / limit)))
 	wg := sync.WaitGroup{}
 	// goroutineの数を制限する

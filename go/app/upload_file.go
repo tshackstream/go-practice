@@ -29,11 +29,10 @@ func OpenUploadFile() *os.File {
 }
 
 // アップロード
-func Upload(reader *gocsv.Unmarshaller) bool {
+func Upload(reader *gocsv.Unmarshaller, bulkNum int) bool {
 	execSucceeded := true
 	for {
-		// 全量重複チェックをする時にmysqlのthread_stack(デフォルト値256KB)の限界が4800件なので1回の処理で4800件にする
-		insertValues, checkConditions, isLast := ReadLines(reader, 4800)
+		insertValues, checkConditions, isLast := ReadLines(reader, bulkNum)
 		succeeded, errorMessages := CheckAndImport(insertValues, checkConditions)
 		if !succeeded {
 			log.Println(strings.Join(errorMessages, "\n"))
@@ -49,11 +48,8 @@ func Upload(reader *gocsv.Unmarshaller) bool {
 }
 
 // 並行処理でアップロード
-func UploadConcurrently(reader *gocsv.Unmarshaller) bool {
+func UploadConcurrently(reader *gocsv.Unmarshaller, bulkNum int) bool {
 	execSucceeded := true
-
-	// 全量重複チェックをする時にmysqlのthread_stack(デフォルト値256KB)の限界が4800件なので1回の処理で4800件にする
-	bulkNum := 4800
 
 	// ファイルの行数を取得
 	rowCountFile := OpenUploadFile()
@@ -104,8 +100,7 @@ func UploadConcurrently(reader *gocsv.Unmarshaller) bool {
 func ReadLines(reader *gocsv.Unmarshaller, bulkNum int) ([]string, []string, bool) {
 	// WHERE句とVALUESのフォーマット
 	// 今回はベタで書いたが、自動で生成しても良いかも
-	conditionFormat := "SELECT todofuken_code, shikuchoson_code, ooaza_code, chome_code FROM addresses " +
-		"WHERE todofuken_code = '%s' AND shikuchoson_code = '%s' AND ooaza_code = '%s' AND chome_code = '%s'"
+	conditionFormat := "('%s', '%s', '%s', '%s')"
 	valuesFormat := "('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')"
 
 	// 指定された行数分各行を読み込みつつ、UPSERT用のVALUES,重複チェック用のWHERE句を準備する
@@ -166,13 +161,12 @@ func CheckAndImport(insertValues []string, checkConditions []string) (bool, []st
 	// 重複チェック
 	if len(checkConditions) > 0 {
 		errorMessageFormat := "都道府県コード: %s 市区町村コード: %s 大字コード: %s 丁目コード: %s は既に登録されています。"
-		// OR検索使うよりも早いUNION ALLを使う
-		// TODO (todofuken_code, shikuchoson_code, ooaza_code, chome_code) IN (x, x, x, x), ... のほうがいいかも
-		// そうしたら1回に処理できるデータが増える
-		// 1回に処理するデータ量が多すぎるとスタック不足になるので要注意
+
+		baseCheckSql := "SELECT todofuken_code, shikuchoson_code, ooaza_code, chome_code FROM addresses " +
+			"WHERE (todofuken_code, shikuchoson_code, ooaza_code, chome_code) IN (%s)"
 		checkSql := fmt.Sprintf(
-			"SELECT todofuken_code, shikuchoson_code, ooaza_code, chome_code FROM (%s) t1",
-			strings.Join(checkConditions, " UNION ALL "))
+			baseCheckSql,
+			strings.Join(checkConditions, ","))
 		checkStmt, err := db.Prepare(checkSql)
 		defer checkStmt.Close()
 		error.ErrorAndExit(err)

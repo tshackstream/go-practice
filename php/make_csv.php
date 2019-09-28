@@ -12,7 +12,7 @@ $pdo = connectToDb($config);
 $totalCount = $pdo->query("SELECT count(*) AS count FROM addresses");
 $count = ($totalCount->fetch())['count'];
 
-$limit = 10000;
+$limit = $argv[1];
 $bulkNum = ceil($count / $limit);
 
 $file->fputcsv(["todofuken_code",

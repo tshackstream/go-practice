@@ -16,11 +16,12 @@ $i = 1;
 $columns = [];
 $checkConditions = [];
 $insertValues = [];
-$conditionFormat = "SELECT todofuken_code, shikuchoson_code, ooaza_code, chome_code FROM addresses  
-    WHERE todofuken_code = '%s' AND shikuchoson_code = '%s' AND ooaza_code = '%s' AND chome_code = '%s'";
+$conditionFormat = "('%s', '%s', '%s', '%s')";
 $valuesFormat = "('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')";
 $errorMassegeFormat = '都道府県コード: %s 市区町村コード: %s 大字コード: %s 丁目コード: %s は既に登録されています。';
 $errorMasseges = [];
+
+$bulkNum = $argv[1];
 
 $pdo = connectToDb($config);
 $pdo->beginTransaction();
@@ -56,7 +57,7 @@ foreach ($file as $line) {
         $namedLine['lon']
     );
 
-    if ($i % 4800 === 0) {
+    if ($i % $bulkNum === 0) {
         if (empty($insertValues)) {
             echo "投入データがありません。";
             exit();
@@ -64,8 +65,9 @@ foreach ($file as $line) {
 
         if (!empty($checkConditions)) {
             $checkSql = sprintf(
-                "SELECT todofuken_code, shikuchoson_code, ooaza_code, chome_code FROM (%s) t1",
-                implode(' UNION ALL ', $checkConditions)
+                'SELECT todofuken_code, shikuchoson_code, ooaza_code, chome_code FROM addresses '
+                . 'WHERE (todofuken_code, shikuchoson_code, ooaza_code, chome_code) IN (%s)',
+                implode(',', $checkConditions)
             );
 
             $checkStmt = $pdo->prepare($checkSql);
@@ -80,7 +82,6 @@ foreach ($file as $line) {
                         $result['ooaza_code'],
                         $result['chome_code']
                     );
-                    echo $errorMassege;
                     $errorMasseges[] = $errorMassege;
                 }
             }

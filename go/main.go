@@ -19,6 +19,8 @@ func main() {
 	// 並行処理オプションがあったら並行処理
 	// Goは並行処理(Concurrent)らしいが、Parallelの方がなじみがあるのでオプションpにする
 	isConcurrent := flag.Bool("p", false, "")
+	// 一度に処理する件数
+	bulkNum := flag.Int("b", 10000, "")
 	flag.Parse()
 
 	// ログファイルの設定
@@ -44,9 +46,9 @@ func main() {
 		var execSucceeded bool
 
 		if *isConcurrent {
-			execSucceeded = app.UploadConcurrently(goCsvReader)
+			execSucceeded = app.UploadConcurrently(goCsvReader, *bulkNum)
 		} else {
-			execSucceeded = app.Upload(goCsvReader)
+			execSucceeded = app.Upload(goCsvReader, *bulkNum)
 		}
 
 		if execSucceeded {
@@ -57,9 +59,9 @@ func main() {
 	// DBからCSVを作成
 	case "make_csv":
 		if *isConcurrent {
-			app.MakeCSVConcurrently()
+			app.MakeCSVConcurrently(*bulkNum)
 		} else {
-			app.MakeCSV()
+			app.MakeCSV(*bulkNum)
 		}
 		log.Print("make csv finished")
 	default:
